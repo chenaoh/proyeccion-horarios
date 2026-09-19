@@ -1,0 +1,7 @@
+Copia esta carpeta (o solo el acceso) a donde quieras: Escritorio, Dock, otra unidad, etc.
+
+- Proyección horarios.app — doble clic (recomendado en Mac)
+- Proyección horarios.command — doble clic; abre Terminal y el navegador
+
+El proyecto debe seguir en /Users/sena/CHENAO/horarios-sena.
+El acceso no lleva fichas ni Excel: al abrir, el sistema queda vacío hasta que cargues tu archivo.
