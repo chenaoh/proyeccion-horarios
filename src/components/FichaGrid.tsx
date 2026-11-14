@@ -10,9 +10,11 @@ type Props = {
   selected: SelectedCell | null;
   swapPreview?: Record<string, SwapTarget>;
   onSelect: (ficha: string, slotKey: string) => void;
+  onExportExcel?: () => void;
+  onExportPdf?: () => void;
 };
 
-export function FichaGrid({ ficha, assigned, selected, swapPreview, onSelect }: Props) {
+export function FichaGrid({ ficha, assigned, selected, swapPreview, onSelect, onExportExcel, onExportPdf }: Props) {
   const slots = slotsForFicha(ficha.jornada, !ficha.saturday);
   const isNight = ficha.jornada === "NOCHE";
   const jornadaClass =
@@ -83,7 +85,29 @@ export function FichaGrid({ ficha, assigned, selected, swapPreview, onSelect }: 
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 bg-slate-900 px-4 py-3 text-white">
-        <h3 className="text-sm font-semibold tracking-tight">{ficha.name}</h3>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h3 className="text-sm font-semibold tracking-tight">{ficha.name}</h3>
+          <div className="flex flex-wrap gap-2">
+            {onExportExcel ? (
+              <button
+                type="button"
+                onClick={onExportExcel}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+              >
+                Excel de esta ficha
+              </button>
+            ) : null}
+            {onExportPdf ? (
+              <button
+                type="button"
+                onClick={onExportPdf}
+                className="rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10"
+              >
+                PDF de esta ficha
+              </button>
+            ) : null}
+          </div>
+        </div>
         <dl className="mt-2 grid gap-x-6 gap-y-1 text-xs text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="uppercase tracking-wide text-slate-400">Ambiente asignado</dt>

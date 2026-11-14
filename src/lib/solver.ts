@@ -1,5 +1,13 @@
 import { inNameList } from "./names";
-import { allowsSixHours, DAILY_HOUR_CAP, hoursOf, maxSaturdayOf, occupiedOf, scheduleFeasibilityIssues } from "./rules";
+import {
+  allowsSixHours,
+  DAILY_HOUR_CAP,
+  hoursOf,
+  isNightInstructorHours,
+  maxSaturdayOf,
+  occupiedOf,
+  scheduleFeasibilityIssues,
+} from "./rules";
 import { MANANA, NOCHE, SABADO, TARDE, WEEKDAYS, overlap, slotKey } from "./slots";
 import type { Day, ExtraRules, FichaInput, OccupiedRange, ParsedWorkbook, Schedule, Slot } from "./types";
 
@@ -160,46 +168,32 @@ type NightBlock = { name: string; hours: 2 | 4 };
 function shapesFor(name: string, hours: number, noSat: boolean, extra: ExtraRules): NightShape[] {
   const noN = inNameList(name, extra.noNoche);
   const noS = noSat || inNameList(name, extra.noSabado);
-  const candidates: NightShape[] =
-    hours === 2
-      ? [
-          { wd4: 0, wd2: 0, sat4: 0, sat2: 1 },
-          { wd4: 0, wd2: 1, sat4: 0, sat2: 0 },
-        ]
-      : hours === 4
-        ? [
-            { wd4: 1, wd2: 0, sat4: 0, sat2: 0 },
-            { wd4: 0, wd2: 0, sat4: 1, sat2: 0 },
-            { wd4: 0, wd2: 1, sat4: 0, sat2: 1 },
-          ]
-        : hours === 6
-          ? [
-              { wd4: 1, wd2: 0, sat4: 0, sat2: 1 },
-              { wd4: 1, wd2: 1, sat4: 0, sat2: 0 },
-              { wd4: 0, wd2: 1, sat4: 1, sat2: 0 },
-              { wd4: 0, wd2: 0, sat4: 1, sat2: 1 },
-              { wd4: 0, wd2: 2, sat4: 0, sat2: 1 },
-              { wd4: 0, wd2: 3, sat4: 0, sat2: 0 },
-            ]
-          : hours === 8
-            ? [
-                { wd4: 2, wd2: 0, sat4: 0, sat2: 0 },
-                { wd4: 1, wd2: 0, sat4: 1, sat2: 0 },
-                { wd4: 1, wd2: 1, sat4: 0, sat2: 1 },
-                { wd4: 0, wd2: 2, sat4: 1, sat2: 0 },
-                { wd4: 0, wd2: 0, sat4: 2, sat2: 0 },
-                { wd4: 0, wd2: 0, sat4: 1, sat2: 2 },
-                { wd4: 0, wd2: 4, sat4: 0, sat2: 0 },
-              ]
-            : [];
-  if (!candidates.length) {
-    throw new Error(`${name} tiene ${hours} h en una ficha de noche (se esperaba 2, 4, 6 u 8).`);
+  const candidates: NightShape[] = [];
+  if (isNightInstructorHours(hours)) {
+    for (let wd4 = 0; wd4 <= 5; wd4++) {
+      for (let wd2 = 0; wd2 <= 6; wd2++) {
+        for (let sat4 = 0; sat4 <= 2; sat4++) {
+          for (let sat2 = 0; sat2 <= 3; sat2++) {
+            const wdH = 4 * wd4 + 2 * wd2;
+            const satH = 4 * sat4 + 2 * sat2;
+            if (wdH > 20 || satH > 10 || wdH + satH !== hours) continue;
+            candidates.push({ wd4, wd2, sat4, sat2 });
+          }
+        }
+      }
+    }
   }
-  return candidates.filter((shape) => {
-    if (noN && shape.wd4 + shape.wd2 > 0) return false;
-    if (noS && shape.sat4 + shape.sat2 > 0) return false;
-    return 4 * shape.wd4 + 2 * shape.wd2 + 4 * shape.sat4 + 2 * shape.sat2 === hours;
-  });
+  if (!candidates.length) {
+    throw new Error(`${name} tiene ${hours} h en una ficha de noche (se esperaban de 2 a 12 h, en bloques de 2).`);
+  }
+  return candidates
+    .filter((shape) => {
+      if (noN && shape.wd4 + shape.wd2 > 0) return false;
+      if (noS && shape.sat4 + shape.sat2 > 0) return false;
+      return 4 * shape.wd4 + 2 * shape.wd2 + 4 * shape.sat4 + 2 * shape.sat2 === hours;
+    })
+    .sort((a, b) => b.wd4 * 10 - b.wd2 - (a.wd4 * 10 - a.wd2))
+    .slice(0, 10);
 }
 
 function pushNamed(list: string[], name: string, count: number) {
@@ -238,6 +232,9 @@ function nightPacks(hours: Record<string, number>, noSat: boolean, extra: ExtraR
       pushNamed(nextWd2, name, shape.wd2);
       pushNamed(nextSat4, name, shape.sat4);
       pushNamed(nextSat2, name, shape.sat2);
+      const wdH = 4 * nextWd4.length + 2 * nextWd2.length;
+      const satH = 4 * nextSat4.length + 2 * nextSat2.length;
+      if (wdH > 20 || satH > satNeed) continue;
       rec(index + 1, nextWd4, nextWd2, nextSat4, nextSat2);
     }
   }

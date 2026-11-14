@@ -27,6 +27,11 @@ export function maxSaturdayOf(extra: ExtraRules, name: string): number {
 
 export const DAILY_HOUR_CAP = 11;
 
+/** Horas de un instructor dentro de una ficha de noche: bloques de 2 h, hasta 12. */
+export function isNightInstructorHours(hours: number): boolean {
+  return hours >= 2 && hours <= 12 && hours % 2 === 0;
+}
+
 export function allowsSixHours(extra: ExtraRules, instructorName: string): boolean {
   return Boolean(extra.allowSixHourBlocks[instructorName]);
 }
@@ -63,8 +68,8 @@ export function scheduleFeasibilityIssues(fichas: FichaInput[], extra: ExtraRule
     if (!total) continue;
     if (ficha.jornada === "NOCHE") {
       for (const [name, hours] of Object.entries(ficha.hours)) {
-        if (![2, 4, 6, 8].includes(hours)) {
-          issues.push(`${ficha.name}: ${name} tiene ${hours} h (en noche se esperan 2, 4, 6 u 8).`);
+        if (!isNightInstructorHours(hours)) {
+          issues.push(`${ficha.name}: ${name} tiene ${hours} h (en noche se esperan de 2 a 12 h, en bloques de 2).`);
         }
       }
       continue;

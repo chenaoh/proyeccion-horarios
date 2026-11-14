@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
-import { exportScheduleWorkbook } from "../src/lib/exportExcel";
+import { exportFichaWorkbook, exportScheduleWorkbook } from "../src/lib/exportExcel";
+import { exportFichaPdf } from "../src/lib/exportFichaPdf";
 import { parseWorkbook } from "../src/lib/parseExcel";
 import { buildBaseTemplate } from "../src/lib/templateExcel";
 import { solveSchedule } from "../src/lib/solver";
@@ -83,6 +84,33 @@ if ((anaNight?.sab ?? 0) !== 0 || anaWeek !== 6) {
   process.exit(1);
 }
 
+function nightTwelveWorkbook(): ArrayBuffer {
+  return workbookFrom([
+    ["AREA:", "TIC"],
+    [],
+    ["FICHA", "JORNADA", "TRIMESTRE", "SABADO", "Director", "Ambiente", "Ana", "Bruno", "Carla", "Diego"],
+    ["Ficha doce", "NOCHE", 1, "SI", "Ana", "Aula 3", 12, 8, 6, 4],
+  ]);
+}
+
+const twelve = parseWorkbook(nightTwelveWorkbook(), "noche-12.xlsx");
+const twelveExtra: ExtraRules = {
+  ...twelve.extraRules,
+  noSabado: ["Carla", "Diego"],
+  noNoche: [],
+  maxSaturdayHours: { Ana: 4, Bruno: 6, Carla: 6, Diego: 6 },
+};
+const twelveSchedule = run("noche 12 h = 8 entre semana + 4 sábado", twelve, twelveExtra, 2500);
+const anaTwelve = twelveSchedule.hoursByInstructorDay.Ana;
+const anaTwelveWeek = (["lun", "mar", "mie", "jue", "vie"] as Day[]).reduce(
+  (sum, day) => sum + (anaTwelve?.[day] ?? 0),
+  0,
+);
+if (anaTwelveWeek !== 8 || (anaTwelve?.sab ?? 0) !== 4) {
+  console.error("Ana debía quedar con 8 h entre semana y 4 h el sábado", anaTwelve);
+  process.exit(1);
+}
+
 const sampleAssignment: FichaAssignment = {
   fichaName: "Ficha noche",
   timelineId: "lt",
@@ -152,6 +180,32 @@ async function checkExport() {
     process.exit(1);
   }
   console.log("\nExcel OK");
+
+  const one = await exportFichaWorkbook(
+    nightOnly.fichas[0],
+    nightSchedule.grid["Ficha noche"] ?? {},
+    nightExtra,
+    nightOnly.area ?? "",
+    sampleAssignment,
+  );
+  const oneBook = new ExcelJS.Workbook();
+  await oneBook.xlsx.load(one);
+  if (oneBook.worksheets.length !== 1 || !oneBook.getWorksheet("Ficha noche")) {
+    console.error("La exportación de una ficha no quedó en una sola hoja");
+    process.exit(1);
+  }
+  const pdf = await exportFichaPdf(
+    nightOnly.fichas[0],
+    nightSchedule.grid["Ficha noche"] ?? {},
+    nightOnly.area ?? "",
+    sampleAssignment,
+  );
+  const pdfHead = Buffer.from(pdf).subarray(0, 5).toString("utf8");
+  if (pdfHead !== "%PDF-" || pdf.byteLength < 500) {
+    console.error("El PDF de la ficha no se generó", pdfHead, pdf.byteLength);
+    process.exit(1);
+  }
+  console.log("Ficha individual Excel y PDF OK");
 
   const hoursTpl = await buildBaseTemplate("hours");
   const hoursParsed = parseWorkbook(hoursTpl, "plantilla_con_horas.xlsx");

@@ -1,4 +1,5 @@
 import { weeklyHoursTarget } from "./hoursTarget";
+import { isNightInstructorHours } from "./rules";
 import { resultLabel, resultsForTrimestre } from "./parseTimeline";
 import type { AssignmentRow, FichaAssignment, FichaInput, Timeline, TimelineResult } from "./types";
 
@@ -105,22 +106,34 @@ export function assignmentIssues(ficha: FichaInput, assignment: FichaAssignment)
       issues.push(`Falta instructor en: ${resultLabel(row)}.`);
     }
   }
+  if (ficha.jornada === "NOCHE") {
+    for (const [name, hours] of Object.entries(hoursByInstructor(assignment.rows))) {
+      if (hours > 0 && !isNightInstructorHours(hours)) {
+        issues.push(`${name} tiene ${hours} h en esta ficha de noche. Deben ser de 2 a 12 h, en bloques de 2.`);
+      }
+    }
+  }
   return issues;
 }
 
 export function setRowHours(
   assignment: FichaAssignment,
-  ficha: FichaInput,
+  _ficha: FichaInput,
   rowId: string,
   hours: number,
 ): { ok: true; assignment: FichaAssignment } | { ok: false; message: string } {
-  const target = weeklyHoursTarget(ficha);
-  const nextRows = assignment.rows.map((row) => (row.id === rowId ? { ...row, hours } : row));
-  const total = hoursOfRows(nextRows);
-  if (total > target) {
-    return { ok: false, message: `No se puede dejar ${hours} h: el total quedaría en ${total} y el tope es ${target} h.` };
+  if (!Number.isFinite(hours) || hours < 0) {
+    return { ok: false, message: "Las horas no pueden ser negativas." };
   }
-  return { ok: true, assignment: { ...assignment, rows: nextRows, saved: false } };
+  const nextHours = Math.round(hours);
+  return {
+    ok: true,
+    assignment: {
+      ...assignment,
+      saved: false,
+      rows: assignment.rows.map((row) => (row.id === rowId ? { ...row, hours: nextHours } : row)),
+    },
+  };
 }
 
 export function setRowInstructor(assignment: FichaAssignment, rowId: string, instructor: string): FichaAssignment {

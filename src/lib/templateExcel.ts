@@ -144,7 +144,7 @@ export async function buildBaseTemplate(kind: TemplateKind): Promise<ArrayBuffer
           "Esas celdas van con fórmula: si cambias horas, el total se actualiza.",
           "",
           "JORNADA debe ser MAÑANA, TARDE o NOCHE.",
-          "En noche, las horas de cada instructor en la ficha deben ser 2, 4, 6 u 8.",
+          "En noche, las horas de cada instructor en la ficha deben ser de 2 a 12, en bloques de 2.",
           "En mañana o tarde, las horas de cada instructor deben ser múltiplo de 3.",
           "El total de una ficha de día suele ser 30 h; de noche, 20 h sin sábado o 30 h con sábado.",
         ]

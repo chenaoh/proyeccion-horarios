@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AddInstructorForm } from "@/components/AddInstructorForm";
 import {
   assignmentIssues,
@@ -293,11 +293,9 @@ export function AssignmentBoard({
                       ) : null}
                     </td>
                     <td className="border border-slate-200 px-3 py-2">
-                      <textarea
+                      <ObservationField
                         value={row.observation}
-                        rows={2}
-                        onChange={(event) => onObservation(open.name, row.id, event.target.value)}
-                        className="w-full min-w-[12rem] rounded border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                        onChange={(value) => onObservation(open.name, row.id, value)}
                       />
                     </td>
                     <td className="border border-slate-200 px-3 py-2">
@@ -444,12 +442,18 @@ export function AssignmentBoard({
                 </article>
               );
             }
+            const started = assignment.rows.some((row) => row.instructor);
+            const cardClass = assignment.saved
+              ? "border-emerald-200 bg-emerald-50 hover:border-emerald-400"
+              : started
+                ? "border-amber-200 bg-amber-50 hover:border-amber-300"
+                : "border-slate-200 bg-white hover:border-teal-400";
             return (
               <button
                 key={ficha.name}
                 type="button"
                 onClick={() => onOpen(ficha.name)}
-                className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-teal-400"
+                className={`rounded-xl border p-4 text-left shadow-sm ${cardClass}`}
               >
                 {body}
               </button>
@@ -477,5 +481,24 @@ export function AssignmentBoard({
         </button>
       </div>
     </div>
+  );
+}
+
+function ObservationField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      rows={1}
+      onChange={(event) => onChange(event.target.value)}
+      className="block w-full min-w-[16rem] resize-none overflow-hidden rounded border border-slate-300 px-2 py-1 text-sm leading-5 text-slate-800"
+    />
   );
 }

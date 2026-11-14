@@ -185,7 +185,8 @@ function AsignacionHelp({ fichaOpen }: { fichaOpen: boolean }) {
       )}
       <ul className="list-disc space-y-1 pl-5">
         <li>El total de la ficha debe cerrar en 20 h (noche sin sábado) o 30 h.</li>
-        <li>En noche, cada instructor en esa ficha debe quedar en 2, 4, 6 u 8 h.</li>
+        <li>En noche, cada instructor en esa ficha debe quedar entre 2 y 12 h, en bloques de 2. Por ejemplo, 8 h entre semana y 4 h el sábado.</li>
+        <li>Las horas de un resultado se pueden bajar para subir las de otro. La ficha se guarda cuando el total cierra.</li>
         <li>En mañana o tarde, las horas de cada instructor deben ser múltiplo de 3.</li>
         <li>El combo muestra las horas totales del instructor en todas las fichas, no solo en esta.</li>
         <li>La observación llega de la fila AP de la línea de tiempo y se puede editar.</li>
@@ -244,6 +245,7 @@ function HorarioHelp() {
         <li>Verde claro: se puede mover ahí. Rojo: cruce o distinta duración.</li>
         <li>Solo se aplica el cambio en una celda verde.</li>
         <li>Deshacer vuelve al horario anterior.</li>
+        <li>Cada ficha tiene Excel y PDF propios, con enfoque, franjas, resultados y observaciones.</li>
       </ul>
       <p>El Excel exportado de cada ficha va en este orden:</p>
       <ol className="list-decimal space-y-1 pl-5">

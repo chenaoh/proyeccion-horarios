@@ -19,7 +19,8 @@ import {
   setRowObservation,
   swapAssignmentRow,
 } from "@/lib/assignment";
-import { downloadBuffer, downloadText, exportScheduleWorkbook } from "@/lib/exportExcel";
+import { downloadBuffer, downloadText, exportFichaWorkbook, exportScheduleWorkbook } from "@/lib/exportExcel";
+import { exportFichaPdf } from "@/lib/exportFichaPdf";
 import { buildBaseTemplate, templateFileName, type TemplateKind } from "@/lib/templateExcel";
 import { timelineFitsFicha } from "@/lib/hoursTarget";
 import { parseWorkbook } from "@/lib/parseExcel";
@@ -532,6 +533,10 @@ export function SchedulerApp() {
     });
   }
 
+  function fileSlug(value: string) {
+    return value.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/gu, "") || "ficha";
+  }
+
   async function exportXlsx() {
     if (!parsed || !schedule || !extra) return;
     const buffer = await exportScheduleWorkbook(
@@ -540,8 +545,23 @@ export function SchedulerApp() {
       extra,
       mode === "manual" ? assignments : undefined,
     );
-    const slug = (parsed.area || "horarios").replace(/[^\p{L}\p{N}]+/gu, "_");
-    downloadBuffer(buffer, `proyeccion_horarios_${slug}.xlsx`);
+    downloadBuffer(buffer, `proyeccion_horarios_${fileSlug(parsed.area || "horarios")}.xlsx`);
+  }
+
+  async function exportOneFicha(fichaName: string, kind: "xlsx" | "pdf") {
+    if (!parsed || !schedule || !extra) return;
+    const ficha = parsed.fichas.find((item) => item.name === fichaName);
+    if (!ficha) return;
+    const assigned = schedule.grid[ficha.name] ?? {};
+    const assignment = mode === "manual" ? assignments[ficha.name] : undefined;
+    const slug = fileSlug(ficha.name);
+    if (kind === "pdf") {
+      const buffer = await exportFichaPdf(ficha, assigned, parsed.area ?? "", assignment, extra);
+      downloadBuffer(buffer, `horario_${slug}.pdf`, "application/pdf");
+      return;
+    }
+    const buffer = await exportFichaWorkbook(ficha, assigned, extra, parsed.area ?? "", assignment);
+    downloadBuffer(buffer, `horario_${slug}.xlsx`);
   }
 
   const areaLabel = parsed?.area?.trim() ?? "";
@@ -985,7 +1005,7 @@ export function SchedulerApp() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                    Horario válido. Puedes exportar el Excel.
+                    Horario válido. Puedes exportar el Excel completo o cada ficha en Excel y PDF.
                   </div>
                 )}
 
@@ -1055,6 +1075,8 @@ export function SchedulerApp() {
                         selected={selected}
                         swapPreview={selected?.ficha === ficha.name ? swapPreview : undefined}
                         onSelect={onSelect}
+                        onExportExcel={() => void exportOneFicha(ficha.name, "xlsx")}
+                        onExportPdf={() => void exportOneFicha(ficha.name, "pdf")}
                       />
                     ))}
                   </div>

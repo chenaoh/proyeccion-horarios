@@ -568,9 +568,25 @@ export function downloadText(text: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export function downloadBuffer(buffer: ArrayBuffer, fileName: string) {
+export async function exportFichaWorkbook(
+  ficha: FichaInput,
+  assigned: Record<string, string>,
+  extra: ExtraRules,
+  area: string,
+  assignment?: FichaAssignment,
+): Promise<ArrayBuffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Area Soft";
+  wb.created = new Date();
+  const used = new Set<string>();
+  writeFichaSheet(wb, uniqueSheetName(ficha.name, used), ficha, assigned, extra, area, assignment);
+  const buf = await wb.xlsx.writeBuffer();
+  return buf as ArrayBuffer;
+}
+
+export function downloadBuffer(buffer: ArrayBuffer, fileName: string, mimeType?: string) {
   const blob = new Blob([new Uint8Array(buffer)], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    type: mimeType ?? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
