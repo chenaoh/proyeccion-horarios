@@ -239,7 +239,7 @@ function HorarioHelp() {
     <div className="space-y-3">
       <p>
         <strong>Iniciar programación</strong> busca un horario sin cruces de instructor ni de
-        ambiente. Si se traba en una ficha, revisa sábado, noche, tope diario o horas que no cierran.
+        ambiente. Si se traba en una ficha, el aviso nombra a los instructores que conviene revisar.
       </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>Clic en una celda: queda seleccionada.</li>

@@ -111,6 +111,23 @@ if (anaTwelveWeek !== 8 || (anaTwelve?.sab ?? 0) !== 4) {
   process.exit(1);
 }
 
+function stuckWorkbook(): ArrayBuffer {
+  return workbookFrom([
+    ["AREA:", "TIC"],
+    [],
+    ["FICHA", "JORNADA", "TRIMESTRE", "SABADO", "Director", "Ambiente", "Ana", "Bruno"],
+    ["ADSO 3314256", "NOCHE", 1, "NO", "Ana", "Aula 1", 8, 12],
+  ]);
+}
+
+const stuck = parseWorkbook(stuckWorkbook(), "trabada.xlsx");
+const stuckResult = solveSchedule(stuck, { ...stuck.extraRules, noNoche: ["Ana"], noSabado: ["Ana"] }, 20);
+if (stuckResult.ok || !stuckResult.message.includes("Ana") || !stuckResult.message.includes("ADSO 3314256")) {
+  console.error("El fallo no señaló a Ana en la ficha trabada", stuckResult);
+  process.exit(1);
+}
+console.log("indicio", stuckResult.message);
+
 const sampleAssignment: FichaAssignment = {
   fichaName: "Ficha noche",
   timelineId: "lt",

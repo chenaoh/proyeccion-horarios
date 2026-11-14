@@ -9,7 +9,7 @@ import {
   scheduleFeasibilityIssues,
 } from "./rules";
 import { MANANA, NOCHE, SABADO, TARDE, WEEKDAYS, overlap, slotKey } from "./slots";
-import type { Day, ExtraRules, FichaInput, OccupiedRange, ParsedWorkbook, Schedule, Slot } from "./types";
+import type { Day, ExtraRules, FichaInput, ParsedWorkbook, Schedule, Slot } from "./types";
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -62,12 +62,6 @@ function assignSaturdayBlocks(
   return dfs(0, blocks);
 }
 
-function slotBlocked(name: string, slot: Slot, occupied: OccupiedRange[], extra: ExtraRules): boolean {
-  if (slot.day === "sab" && inNameList(name, extra.noSabado)) return true;
-  if (slot.day !== "sab" && slot.start >= 18 && inNameList(name, extra.noNoche)) return true;
-  return occupied.some((o) => o.day === slot.day && overlap(slot.start, slot.end, o.start, o.end));
-}
-
 type Interval = { a: number; b: number; ficha: string };
 type Busy = Record<string, Record<Day, Interval[]>>;
 type HoursDay = Record<string, Record<Day, number>>;
@@ -94,28 +88,38 @@ class State {
   }
 
   can(name: string, slot: Slot, ficha: FichaInput, extra: ExtraRules, maxh = DAILY_HOUR_CAP): boolean {
+    return this.whyNot(name, slot, ficha, extra, maxh) === null;
+  }
+
+  whyNot(name: string, slot: Slot, ficha: FichaInput, extra: ExtraRules, maxh = DAILY_HOUR_CAP): string | null {
     this.ensure(name);
+    if (slot.day === "sab" && inNameList(name, extra.noSabado)) return "no puede el sábado";
+    if (slot.day !== "sab" && slot.start >= 18 && inNameList(name, extra.noNoche)) return "no puede noche entre semana";
     const occupied = occupiedOf(extra, name);
-    if (slotBlocked(name, slot, occupied, extra)) return false;
-    if (this.hours[name][slot.day] + slot.hours > maxh) return false;
+    if (occupied.some((item) => item.day === slot.day && overlap(slot.start, slot.end, item.start, item.end))) {
+      return "tiene una franja ocupada";
+    }
+    if (this.hours[name][slot.day] + slot.hours > maxh) return "pasa de 11 h en el día";
     if (slot.day === "sab" && this.hours[name].sab + slot.hours > maxSaturdayOf(extra, name)) {
-      return false;
+      return "pasa el tope de sábado";
     }
     const already = this.fichaDay[ficha.name]?.[name]?.[slot.day] ?? 0;
     const next = already + slot.hours;
     if (ficha.jornada !== "NOCHE") {
       if (allowsSixHours(extra, name)) {
-        if (next > 6) return false;
+        if (next > 6) return "pasa de 6 h seguidas en la ficha";
       } else if (next >= 6) {
-        return false;
+        return "no tiene marcadas 6 h seguidas";
       }
     }
-    if (this.busy[name][slot.day].some((b) => overlap(slot.start, slot.end, b.a, b.b))) return false;
+    if (this.busy[name][slot.day].some((item) => overlap(slot.start, slot.end, item.a, item.b))) {
+      return "ya está en otra ficha a esa hora";
+    }
     if (ficha.ambiente) {
       const amb = this.ambBusy[ficha.ambiente]?.[slot.day] ?? [];
-      if (amb.some((b) => overlap(slot.start, slot.end, b.a, b.b))) return false;
+      if (amb.some((item) => overlap(slot.start, slot.end, item.a, item.b))) return "el ambiente ya está ocupado";
     }
-    return true;
+    return null;
   }
 
   put(name: string, slot: Slot, ficha: FichaInput) {
@@ -389,14 +393,62 @@ export type SolveProgress = {
 
 type AttemptResult =
   | { ok: true; schedule: Schedule }
-  | { ok: false; lastFail?: string; error?: string };
+  | { ok: false; lastFail?: string; hint?: string; error?: string };
 
-function failResult(lastFail?: string): SolveResult {
+function slotsOf(ficha: FichaInput): Slot[] {
+  if (ficha.jornada === "MAÑANA") return MANANA;
+  if (ficha.jornada === "TARDE") return TARDE;
+  return ficha.saturday ? [...NOCHE, ...SABADO] : [...NOCHE];
+}
+
+function instructorHints(st: State, ficha: FichaInput, extra: ExtraRules): string {
+  const people = Object.entries(ficha.hours).filter(([, hours]) => hours > 0);
+  const slots = slotsOf(ficha);
+  const flagged: string[] = [];
+  for (const [name, hours] of people) {
+    if (ficha.jornada === "NOCHE") {
+      const shapes = shapesFor(name, hours, !ficha.saturday, extra);
+      if (!shapes.length) {
+        const noN = inNameList(name, extra.noNoche);
+        const noS = !ficha.saturday || inNameList(name, extra.noSabado);
+        const why =
+          noN && noS
+            ? "no puede noche ni sábado"
+            : noN
+              ? "no puede noche entre semana y el sábado no le alcanza"
+              : noS
+                ? "no puede sábado y entre semana no le alcanza"
+                : "no hay forma de partir esas horas";
+        flagged.push(`${name} (${hours} h: ${why})`);
+        continue;
+      }
+    }
+    let free = 0;
+    const reasons = new Map<string, number>();
+    for (const slot of slots) {
+      const why = st.whyNot(name, slot, ficha, extra);
+      if (why) reasons.set(why, (reasons.get(why) ?? 0) + 1);
+      else free += slot.hours;
+    }
+    if (free < hours) {
+      const top = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0];
+      flagged.push(`${name} (${hours} h, le quedan ${free} h libres${top ? `: ${top[0]}` : ""})`);
+    }
+  }
+  if (flagged.length) return flagged.slice(0, 5).join("; ");
+  return people
+    .slice(0, 6)
+    .map(([name, hours]) => `${name} (${hours} h)`)
+    .join(", ");
+}
+
+function failResult(lastFail?: string, hint?: string): SolveResult {
+  const who = hint ? ` Revisa a: ${hint}.` : " Revisa restricciones, ambientes o tope de sábado.";
   return {
     ok: false,
     failedFicha: lastFail,
     message: lastFail
-      ? `No se encontró un horario sin cruces. Se trabó en: ${lastFail}. Revisa restricciones, ambientes o tope de sábado.`
+      ? `No se encontró un horario sin cruces. Se trabó en: ${lastFail}.${who}`
       : "No se pudo generar un horario con las restricciones actuales.",
   };
 }
@@ -418,7 +470,7 @@ function tryOneAttempt(parsed: ParsedWorkbook, extra: ExtraRules): AttemptResult
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    if (!good) return { ok: false, lastFail: ficha.name };
+    if (!good) return { ok: false, lastFail: ficha.name, hint: instructorHints(st, ficha, extra) };
   }
   return { ok: true, schedule: { grid: st.grid, hoursByInstructorDay: st.hours } };
 }
@@ -426,11 +478,11 @@ function tryOneAttempt(parsed: ParsedWorkbook, extra: ExtraRules): AttemptResult
 function consumeAttempt(
   parsed: ParsedWorkbook,
   extra: ExtraRules,
-): SolveResult | { continue: true; lastFail?: string } {
+): SolveResult | { continue: true; lastFail?: string; hint?: string } {
   const result = tryOneAttempt(parsed, extra);
   if (result.ok) return { ok: true, schedule: result.schedule };
   if (result.error) return { ok: false, message: result.error };
-  return { continue: true, lastFail: result.lastFail };
+  return { continue: true, lastFail: result.lastFail, hint: result.hint };
 }
 
 export function solveSchedule(
@@ -444,6 +496,7 @@ export function solveSchedule(
     return { ok: false, message: blocked[0] };
   }
   let lastFail: string | undefined;
+  let lastHint: string | undefined;
   let lastReport = 0;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const now = Date.now();
@@ -454,11 +507,12 @@ export function solveSchedule(
     const step = consumeAttempt(parsed, extra);
     if ("continue" in step) {
       lastFail = step.lastFail;
+      lastHint = step.hint;
       continue;
     }
     return step;
   }
-  return failResult(lastFail);
+  return failResult(lastFail, lastHint);
 }
 
 export async function solveScheduleAsync(
@@ -472,6 +526,7 @@ export async function solveScheduleAsync(
     return { ok: false, message: blocked[0] };
   }
   let lastFail: string | undefined;
+  let lastHint: string | undefined;
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt === 0 || attempt % 8 === 0 || attempt === attempts - 1) {
       onProgress?.({ attempt: attempt + 1, attempts });
@@ -482,9 +537,10 @@ export async function solveScheduleAsync(
     const step = consumeAttempt(parsed, extra);
     if ("continue" in step) {
       lastFail = step.lastFail;
+      lastHint = step.hint;
       continue;
     }
     return step;
   }
-  return failResult(lastFail);
+  return failResult(lastFail, lastHint);
 }
