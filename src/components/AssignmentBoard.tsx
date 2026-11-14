@@ -64,7 +64,7 @@ function OverloadAlert({ items }: { items: { name: string; hours: number }[] }) 
 }
 
 function topicsForInstructor(name: string, fichas: FichaInput[], assignments: Record<string, FichaAssignment>) {
-  const topics: { ficha: string; result: string; observation: string }[] = [];
+  const topics: { ficha: string; result: string; observation: string; hours: number }[] = [];
   for (const ficha of fichas) {
     const assignment = assignments[ficha.name];
     if (!assignment) continue;
@@ -74,6 +74,7 @@ function topicsForInstructor(name: string, fichas: FichaInput[], assignments: Re
         ficha: ficha.name,
         result: resultLabel(row),
         observation: (row.observation || row.ap).trim() || "Sin observación",
+        hours: row.hours,
       });
     }
   }
@@ -152,7 +153,12 @@ function InstructorProgress({
                                 key={`${topic.ficha}-${topic.result}-${index}`}
                                 className="rounded-lg border border-teal-200 bg-white p-3 shadow-sm"
                               >
-                                <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">{topic.ficha}</p>
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">{topic.ficha}</p>
+                                  <p className="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-900">
+                                    {topic.hours} h
+                                  </p>
+                                </div>
                                 <p className="mt-1 text-xs text-slate-500">{topic.result}</p>
                                 <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-slate-800">{topic.observation}</p>
                               </article>
