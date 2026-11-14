@@ -16,6 +16,7 @@ import {
   hoursByInstructor,
   setRowHours,
   setRowInstructor,
+  setRowObservation,
   swapAssignmentRow,
 } from "@/lib/assignment";
 import { downloadBuffer, downloadText, exportScheduleWorkbook } from "@/lib/exportExcel";
@@ -24,6 +25,7 @@ import { timelineFitsFicha } from "@/lib/hoursTarget";
 import { parseWorkbook } from "@/lib/parseExcel";
 import { parseTimelineWorkbook } from "@/lib/parseTimeline";
 import { parseProgressMarkdown, serializeProgress } from "@/lib/progressFile";
+import { inNameList, DEFAULT_NO_NOCHE, DEFAULT_NO_SABADO } from "@/lib/names";
 import { normalizeExtraRules } from "@/lib/rules";
 import { SOLVE_ATTEMPTS, startBackgroundSolve } from "@/lib/solveInBackground";
 import { DAY_LABEL, DAYS, formatRange, parseSlotKey } from "@/lib/slots";
@@ -304,6 +306,50 @@ export function SchedulerApp() {
     });
   }
 
+  function changeSaturday(fichaName: string, saturday: boolean) {
+    if (!parsed) return;
+    setParsed({
+      ...parsed,
+      fichas: parsed.fichas.map((ficha) => (ficha.name === fichaName ? { ...ficha, saturday } : ficha)),
+    });
+    setAssignments((prev) => {
+      const current = prev[fichaName];
+      if (!current || !current.saved) return prev;
+      return { ...prev, [fichaName]: { ...current, saved: false } };
+    });
+    if (schedule) {
+      setSchedule(null);
+      setHistory([]);
+      setSelected(null);
+      setSwapError(null);
+      setPhase("setup");
+      setHint("Cambió el sábado de una ficha. Vuelve a generar el horario.");
+    }
+  }
+
+  function addInstructor(raw: string): string | null {
+    if (!parsed || !extra) return "Primero carga una proyección.";
+    const name = raw.replace(/\s+/g, " ").trim();
+    if (!name) return "Escribe el nombre del instructor.";
+    if (inNameList(name, parsed.instructorNames)) return "Ese instructor ya está en la lista.";
+    const instructorNames = [...parsed.instructorNames, name];
+    const next = normalizeExtraRules(extra, instructorNames, parsed.fichas);
+    setParsed({ ...parsed, instructorNames });
+    setExtra({
+      ...next,
+      noNoche:
+        inNameList(name, DEFAULT_NO_NOCHE) && !inNameList(name, next.noNoche)
+          ? [...next.noNoche, name]
+          : next.noNoche,
+      noSabado:
+        inNameList(name, DEFAULT_NO_SABADO) && !inNameList(name, next.noSabado)
+          ? [...next.noSabado, name]
+          : next.noSabado,
+    });
+    setHint(`${name} quedó disponible para asignar.`);
+    return null;
+  }
+
   function backToTimelines() {
     setOpenFicha(null);
     setAssignMessage(null);
@@ -334,6 +380,12 @@ export function SchedulerApp() {
     if (!current) return;
     setAssignMessage(null);
     patchAssignment(fichaName, setRowInstructor(current, rowId, instructor));
+  }
+
+  function changeObservation(fichaName: string, rowId: string, observation: string) {
+    const current = assignments[fichaName];
+    if (!current) return;
+    patchAssignment(fichaName, setRowObservation(current, rowId, observation));
   }
 
   function swapResult(fichaName: string, rowId: string, resultId: string) {
@@ -823,6 +875,9 @@ export function SchedulerApp() {
                 onHours={changeHours}
                 onInstructor={changeInstructor}
                 onDirector={changeDirector}
+                onSaturday={changeSaturday}
+                onObservation={changeObservation}
+                onAddInstructor={addInstructor}
                 onSwap={swapResult}
                 onSave={saveAssignment}
                 onContinue={continueToRestrictions}
@@ -845,7 +900,13 @@ export function SchedulerApp() {
                     Volver a asignación
                   </button>
                 ) : null}
-                <RestrictionsPanel parsed={parsed} extra={extra} onChange={setExtra} />
+                <RestrictionsPanel
+                  parsed={parsed}
+                  extra={extra}
+                  onChange={setExtra}
+                  onSaturday={changeSaturday}
+                  onAddInstructor={addInstructor}
+                />
               </>
             ) : null}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AddInstructorForm } from "@/components/AddInstructorForm";
 import {
   assignmentIssues,
   hoursByInstructor,
@@ -24,6 +25,9 @@ type Props = {
   onHours: (fichaName: string, rowId: string, hours: number) => void;
   onInstructor: (fichaName: string, rowId: string, instructor: string) => void;
   onDirector: (fichaName: string, director: string) => void;
+  onSaturday: (fichaName: string, saturday: boolean) => void;
+  onObservation: (fichaName: string, rowId: string, observation: string) => void;
+  onAddInstructor: (name: string) => string | null;
   onSwap: (fichaName: string, rowId: string, resultId: string) => void;
   onSave: (fichaName: string) => void;
   onContinue: () => void;
@@ -121,6 +125,9 @@ export function AssignmentBoard({
   onHours,
   onInstructor,
   onDirector,
+  onSaturday,
+  onObservation,
+  onAddInstructor,
   onSwap,
   onSave,
   onContinue,
@@ -185,6 +192,14 @@ export function AssignmentBoard({
               {resultCount} {resultCount === 1 ? "resultado" : "resultados"} en el trimestre
               {open.trimestre != null ? ` T${open.trimestre}` : ""}
             </p>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={open.saturday}
+                onChange={(event) => onSaturday(open.name, event.target.checked)}
+              />
+              Programar sábado
+            </label>
             <label className="text-xs font-semibold text-slate-300">
               Director de grupo
               <select
@@ -200,6 +215,9 @@ export function AssignmentBoard({
                 ))}
               </select>
             </label>
+          </div>
+          <div className="mt-4 rounded-lg bg-slate-800 px-3 py-3">
+            <AddInstructorForm tone="dark" onAdd={onAddInstructor} />
           </div>
         </header>
         {message ? (
@@ -274,7 +292,14 @@ export function AssignmentBoard({
                         </p>
                       ) : null}
                     </td>
-                    <td className="border border-slate-200 px-3 py-2 text-xs text-slate-600">{row.observation || "—"}</td>
+                    <td className="border border-slate-200 px-3 py-2">
+                      <textarea
+                        value={row.observation}
+                        rows={2}
+                        onChange={(event) => onObservation(open.name, row.id, event.target.value)}
+                        className="w-full min-w-[12rem] rounded border border-slate-300 px-2 py-1 text-xs text-slate-800"
+                      />
+                    </td>
                     <td className="border border-slate-200 px-3 py-2">
                       <select
                         className="max-w-[14rem] rounded border border-slate-300 px-2 py-1 text-xs"
@@ -334,6 +359,7 @@ export function AssignmentBoard({
           debe cerrar en 20 o 30 h; si un instructor pasa de {INSTRUCTOR_HOUR_ALERT} h solo se avisa.
         </p>
       </div>
+      <AddInstructorForm onAdd={onAddInstructor} />
       {message ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{message}</div>
       ) : null}

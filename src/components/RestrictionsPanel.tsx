@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import { AddInstructorForm } from "@/components/AddInstructorForm";
 import { DAY_LABEL, DAYS, formatHour } from "@/lib/slots";
 import { hoursOf, maxSaturdayOf, allowsSixHours } from "@/lib/rules";
 import { inNameList, namesMatch } from "@/lib/names";
@@ -12,9 +13,11 @@ type Props = {
   parsed: ParsedWorkbook;
   extra: ExtraRules;
   onChange: (next: ExtraRules) => void;
+  onSaturday: (fichaName: string, saturday: boolean) => void;
+  onAddInstructor: (name: string) => string | null;
 };
 
-export function RestrictionsPanel({ parsed, extra, onChange }: Props) {
+export function RestrictionsPanel({ parsed, extra, onChange, onSaturday, onAddInstructor }: Props) {
   const [draftDay, setDraftDay] = useState<Record<string, Day>>({});
   const [draftStart, setDraftStart] = useState<Record<string, number>>({});
   const [draftEnd, setDraftEnd] = useState<Record<string, number>>({});
@@ -64,8 +67,8 @@ export function RestrictionsPanel({ parsed, extra, onChange }: Props) {
           Fichas cargadas ({parsed.fichas.length})
         </h2>
         <p className="mt-1 text-xs text-slate-500">
-          El área, las fichas y los instructores salen del Excel. El sábado de cada ficha sale de la columna
-          SABADO. El tope de 11 h al día es fijo. Las 6 h seguidas en una ficha se marcan por instructor, más abajo.
+          El área y las fichas salen del Excel. El sábado de cada ficha se puede cambiar aquí, y puedes agregar
+          un instructor que no venía en el archivo. El tope de 11 h al día es fijo.
         </p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {parsed.fichas.map((ficha) => (
@@ -79,6 +82,22 @@ export function RestrictionsPanel({ parsed, extra, onChange }: Props) {
                 {ficha.ambiente ? ` · ${ficha.ambiente}` : ""}
                 {` · ${hoursOf(ficha)} h`}
               </p>
+              <label className="mt-3 flex items-start gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={ficha.saturday}
+                  onChange={(event) => onSaturday(ficha.name, event.target.checked)}
+                />
+                <span>
+                  Programar sábado
+                  <span className="block text-xs text-slate-500">
+                    {ficha.jornada === "NOCHE"
+                      ? "En noche suma las franjas del sábado y el tope pasa de 20 h a 30 h."
+                      : "Queda marcado en la ficha. El horario de mañana y tarde sigue de lunes a viernes."}
+                  </span>
+                </span>
+              </label>
               <p className="mt-2 text-xs text-slate-600">
                 {Object.entries(ficha.hours)
                   .map(([n, h]) => `${n} ${h}h`)
@@ -97,6 +116,9 @@ export function RestrictionsPanel({ parsed, extra, onChange }: Props) {
           Franjas ocupadas no se programan. Nadie puede pasar de 11 h el mismo día sumando mañana, tarde y noche.
           Las 6 h seguidas son opcionales y solo aplican dentro de una misma ficha; el check sale apagado.
         </p>
+        <div className="mt-3">
+          <AddInstructorForm onAdd={onAddInstructor} />
+        </div>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           {parsed.instructorNames.map((name) => {
             const occupied = extra.occupied[name] ?? [];

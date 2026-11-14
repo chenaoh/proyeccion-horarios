@@ -131,6 +131,14 @@ export function setRowInstructor(assignment: FichaAssignment, rowId: string, ins
   };
 }
 
+export function setRowObservation(assignment: FichaAssignment, rowId: string, observation: string): FichaAssignment {
+  return {
+    ...assignment,
+    saved: false,
+    rows: assignment.rows.map((row) => (row.id === rowId ? { ...row, observation } : row)),
+  };
+}
+
 export function swapAssignmentRow(
   assignment: FichaAssignment,
   ficha: FichaInput,
