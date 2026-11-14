@@ -146,15 +146,18 @@ function InstructorProgress({
                     <tr className="bg-teal-50/60">
                       <td colSpan={3} className="border-t border-teal-100 px-4 py-3">
                         {topics.length ? (
-                          <ul className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {topics.map((topic, index) => (
-                              <li key={`${topic.ficha}-${topic.result}-${index}`}>
+                              <article
+                                key={`${topic.ficha}-${topic.result}-${index}`}
+                                className="rounded-lg border border-teal-200 bg-white p-3 shadow-sm"
+                              >
                                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">{topic.ficha}</p>
-                                <p className="mt-0.5 text-xs text-slate-500">{topic.result}</p>
-                                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{topic.observation}</p>
-                              </li>
+                                <p className="mt-1 text-xs text-slate-500">{topic.result}</p>
+                                <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-slate-800">{topic.observation}</p>
+                              </article>
                             ))}
-                          </ul>
+                          </div>
                         ) : (
                           <p className="text-sm text-slate-500">Este instructor todavía no tiene temas asignados.</p>
                         )}
