@@ -1,8 +1,18 @@
 'use client';
 
+import { useState } from "react";
 import { DAY_LABEL, WEEKDAYS, formatRange, parseSlotKey, slotKey, slotsForFicha } from "@/lib/slots";
 import type { FichaInput, SelectedCell } from "@/lib/types";
 import type { SwapTarget } from "@/lib/validate";
+
+export type FichaDetailRow = {
+  id: string;
+  norma: string;
+  resultado: string;
+  instructor: string;
+  hours: number;
+  observation: string;
+};
 
 type Props = {
   ficha: FichaInput;
@@ -12,9 +22,22 @@ type Props = {
   onSelect: (ficha: string, slotKey: string) => void;
   onExportExcel?: () => void;
   onExportPdf?: () => void;
+  detailRows?: FichaDetailRow[];
+  enfoque?: string;
 };
 
-export function FichaGrid({ ficha, assigned, selected, swapPreview, onSelect, onExportExcel, onExportPdf }: Props) {
+export function FichaGrid({
+  ficha,
+  assigned,
+  selected,
+  swapPreview,
+  onSelect,
+  onExportExcel,
+  onExportPdf,
+  detailRows = [],
+  enfoque = "",
+}: Props) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const slots = slotsForFicha(ficha.jornada, !ficha.saturday);
   const isNight = ficha.jornada === "NOCHE";
   const jornadaClass =
@@ -251,6 +274,68 @@ export function FichaGrid({ ficha, assigned, selected, swapPreview, onSelect, on
           </span>
         ) : null}
       </p>
+      <div className="border-t border-slate-200 px-4 py-2">
+        <button
+          type="button"
+          aria-expanded={detailOpen}
+          onClick={() => setDetailOpen((open) => !open)}
+          className="text-sm font-semibold text-teal-700 hover:underline"
+        >
+          {detailOpen ? "Ocultar detalle" : "Ver detalle"}
+        </button>
+      </div>
+      {detailOpen ? (
+        <div className="border-t border-slate-200">
+          {enfoque.trim() ? (
+            <p className="whitespace-pre-wrap border-b border-slate-100 px-4 py-3 text-sm text-slate-700">{enfoque}</p>
+          ) : null}
+          {detailRows.length ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-900 text-xs text-white">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Norma de competencia</th>
+                    <th className="px-3 py-2 font-semibold">Resultado</th>
+                    <th className="px-3 py-2 font-semibold">Instructor</th>
+                    <th className="px-3 py-2 font-semibold">Horas</th>
+                    <th className="px-3 py-2 font-semibold">Observación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailRows.map((row) => (
+                    <tr key={row.id} className="border-t border-slate-100 align-top">
+                      <td className="px-3 py-2">{row.norma || "—"}</td>
+                      <td className="whitespace-pre-wrap px-3 py-2">{row.resultado || "—"}</td>
+                      <td className="px-3 py-2">{row.instructor || "—"}</td>
+                      <td className="px-3 py-2">{row.hours}</td>
+                      <td className="whitespace-pre-wrap px-3 py-2">{row.observation || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-900 text-xs text-white">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Instructor</th>
+                    <th className="px-3 py-2 font-semibold">Horas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(ficha.hours).map(([name, hours]) => (
+                    <tr key={name} className="border-t border-slate-100">
+                      <td className="px-3 py-2">{name}</td>
+                      <td className="px-3 py-2">{hours}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

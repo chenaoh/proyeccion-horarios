@@ -63,7 +63,7 @@ const extra = {
   allowSixHourBlocks: { Ana: true, Bruno: true, Carla: false, Diego: false },
   maxSaturdayHours: { Ana: 6, Bruno: 6, Carla: 10, Diego: 6 },
 };
-run("3 fichas / 4 instructores", mini, extra, 4000);
+const miniSchedule = run("3 fichas / 4 instructores", mini, extra, 4000);
 
 const nightOnly = parseWorkbook(nightNoSaturdayWorkbook(), "noche-sin-sabado.xlsx");
 const nightExtra: ExtraRules = {
@@ -247,6 +247,28 @@ async function checkExport() {
     process.exit(1);
   }
   console.log("Reporte recargado OK");
+
+  const dayExported = await exportScheduleWorkbook(mini, miniSchedule, extra);
+  const dayReloaded = await parseScheduleReport(dayExported, "dia.xlsx");
+  const dayIssues = validateSchedule(dayReloaded.parsed, dayReloaded.schedule, dayReloaded.extra);
+  const morningKeys = Object.keys(dayReloaded.schedule.grid["Ficha mañana"] ?? {});
+  const tardeKeys = Object.keys(dayReloaded.schedule.grid["Ficha tarde"] ?? {});
+  const nocheKeys = Object.keys(dayReloaded.schedule.grid["Ficha noche"] ?? {});
+  if (
+    dayIssues.length ||
+    !morningKeys.some((key) => key.includes("|09-12|")) ||
+    !tardeKeys.some((key) => key.includes("|12-15|")) ||
+    !nocheKeys.some((key) => key.includes("|10-12|"))
+  ) {
+    console.error("La franja hasta las 12 m no se leyó", {
+      issues: dayIssues.slice(0, 8),
+      morningKeys,
+      tardeKeys,
+      nocheKeys,
+    });
+    process.exit(1);
+  }
+  console.log("Franjas de mediodía OK");
 
   const hoursTpl = await buildBaseTemplate("hours");
   const hoursParsed = parseWorkbook(hoursTpl, "plantilla_con_horas.xlsx");

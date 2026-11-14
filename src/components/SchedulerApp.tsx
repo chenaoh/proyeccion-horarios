@@ -1132,49 +1132,27 @@ export function SchedulerApp() {
                           : parsed.fichas
                     ).map((ficha) => {
                       const detail = assignments[ficha.name];
+                      const enfoque = detail?.rows.find((row) => row.enfoque.trim())?.enfoque ?? "";
                       return (
-                        <div key={ficha.name} className="space-y-3">
-                          <FichaGrid
-                            ficha={ficha}
-                            assigned={schedule.grid[ficha.name] ?? {}}
-                            selected={selected}
-                            swapPreview={selected?.ficha === ficha.name ? swapPreview : undefined}
-                            onSelect={onSelect}
-                            onExportExcel={() => void exportOneFicha(ficha.name, "xlsx")}
-                            onExportPdf={() => void exportOneFicha(ficha.name, "pdf")}
-                          />
-                          {detail?.rows.length ? (
-                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                              <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800">
-                                Detalle de la ficha
-                              </p>
-                              <div className="overflow-x-auto">
-                                <table className="min-w-full text-left text-sm">
-                                  <thead className="bg-slate-900 text-xs text-white">
-                                    <tr>
-                                      <th className="px-3 py-2 font-semibold">Norma de competencia</th>
-                                      <th className="px-3 py-2 font-semibold">Resultado</th>
-                                      <th className="px-3 py-2 font-semibold">Instructor</th>
-                                      <th className="px-3 py-2 font-semibold">Horas</th>
-                                      <th className="px-3 py-2 font-semibold">Observación</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {detail.rows.map((row) => (
-                                      <tr key={row.id} className="border-t border-slate-100 align-top">
-                                        <td className="px-3 py-2">{row.norma || "—"}</td>
-                                        <td className="whitespace-pre-wrap px-3 py-2">{row.resultados.join("\n") || "—"}</td>
-                                        <td className="px-3 py-2">{row.instructor || "—"}</td>
-                                        <td className="px-3 py-2">{row.hours}</td>
-                                        <td className="whitespace-pre-wrap px-3 py-2">{row.observation || row.ap || "—"}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
+                        <FichaGrid
+                          key={ficha.name}
+                          ficha={ficha}
+                          assigned={schedule.grid[ficha.name] ?? {}}
+                          selected={selected}
+                          swapPreview={selected?.ficha === ficha.name ? swapPreview : undefined}
+                          onSelect={onSelect}
+                          onExportExcel={() => void exportOneFicha(ficha.name, "xlsx")}
+                          onExportPdf={() => void exportOneFicha(ficha.name, "pdf")}
+                          enfoque={enfoque}
+                          detailRows={detail?.rows.map((row) => ({
+                            id: row.id,
+                            norma: row.norma,
+                            resultado: row.resultados.join("\n"),
+                            instructor: row.instructor,
+                            hours: row.hours,
+                            observation: row.observation || row.ap,
+                          }))}
+                        />
                       );
                     })}
                   </div>

@@ -252,6 +252,7 @@ function HorarioHelp() {
         <li>Deshacer vuelve al horario anterior.</li>
         <li>Cada ficha tiene Excel y PDF propios, con enfoque, franjas, resultados y observaciones.</li>
         <li>El botón Horario vuelve a abrir un Excel exportado para consultarlo y seguir moviendo franjas.</li>
+        <li>Ver detalle, debajo de cada ficha, abre el enfoque, los resultados y las horas. Un segundo clic lo cierra.</li>
       </ul>
       <p>El Excel exportado de cada ficha va en este orden:</p>
       <ol className="list-decimal space-y-1 pl-5">

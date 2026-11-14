@@ -50,9 +50,9 @@ function hourOf(raw: string): number | null {
   if (!match) return null;
   let hour = Number(match[1]);
   const suffix = match[2] ?? "";
+  if (suffix === "m") return hour === 12 ? 12 : null;
   if (suffix === "pm" && hour < 12) hour += 12;
   if (suffix === "am" && hour === 12) hour = 0;
-  if (suffix === "m") return 12;
   return hour;
 }
 
@@ -60,7 +60,7 @@ function rangeFromLabel(label: string): { start: number; end: number } | null {
   const clean = label.replace(/^s[aá]bado\s+/i, "");
   const parts = clean.split(/\s+a\s+/i);
   if (parts.length < 2) return null;
-  const suffix = parts[1].match(/(am|pm|m)\s*$/i)?.[1] ?? "";
+  const suffix = parts[1].match(/(am|pm)\s*$/i)?.[1] ?? "";
   const startRaw = /(am|pm|m)/i.test(parts[0]) || !suffix ? parts[0] : `${parts[0]} ${suffix}`;
   const start = hourOf(startRaw);
   const end = hourOf(parts[1]);
