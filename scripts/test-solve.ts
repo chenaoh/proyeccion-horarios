@@ -224,6 +224,30 @@ async function checkExport() {
   }
   console.log("Ficha individual Excel y PDF OK");
 
+  const { parseScheduleReport } = await import("../src/lib/parseScheduleReport");
+  const reloaded = await parseScheduleReport(exported, "reporte.xlsx");
+  const gridEntries = (grid: Record<string, Record<string, string>>) =>
+    Object.entries(grid)
+      .map(([ficha, cells]) => [ficha, Object.entries(cells).sort().map(([key, name]) => `${key}=${name}`).join("|")] as const)
+      .sort();
+  const sameGrid =
+    JSON.stringify(gridEntries(reloaded.schedule.grid)) === JSON.stringify(gridEntries(nightSchedule.grid));
+  const sameHours =
+    JSON.stringify(reloaded.parsed.fichas[0]?.hours) === JSON.stringify(nightOnly.fichas[0]?.hours);
+  const keptAna = reloaded.extra.noSabado.includes("Ana");
+  const keptDetail = reloaded.assignments["Ficha noche"]?.rows[0]?.observation === "Obs";
+  if (!sameGrid || !sameHours || !keptAna || !keptDetail || (reloaded.parsed.area || "") !== (nightOnly.area || "")) {
+    console.error("El reporte no se volvió a leer igual", {
+      sameGrid,
+      sameHours,
+      keptAna,
+      keptDetail,
+      area: reloaded.parsed.area,
+    });
+    process.exit(1);
+  }
+  console.log("Reporte recargado OK");
+
   const hoursTpl = await buildBaseTemplate("hours");
   const hoursParsed = parseWorkbook(hoursTpl, "plantilla_con_horas.xlsx");
   if (hoursParsed.fichas.length !== 3 || hoursParsed.instructorNames.length !== 4) {

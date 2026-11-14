@@ -24,6 +24,7 @@ import { exportFichaPdf } from "@/lib/exportFichaPdf";
 import { buildBaseTemplate, templateFileName, type TemplateKind } from "@/lib/templateExcel";
 import { timelineFitsFicha } from "@/lib/hoursTarget";
 import { parseWorkbook } from "@/lib/parseExcel";
+import { parseScheduleReport } from "@/lib/parseScheduleReport";
 import { parseTimelineWorkbook } from "@/lib/parseTimeline";
 import { parseProgressMarkdown, serializeProgress } from "@/lib/progressFile";
 import { inNameList, DEFAULT_NO_NOCHE, DEFAULT_NO_SABADO } from "@/lib/names";
@@ -48,6 +49,7 @@ export function SchedulerApp() {
   const hoursInputRef = useRef<HTMLInputElement>(null);
   const manualInputRef = useRef<HTMLInputElement>(null);
   const progressInputRef = useRef<HTMLInputElement>(null);
+  const reportInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<LoadMode | null>(null);
   const [parsed, setParsed] = useState<ParsedWorkbook | null>(null);
   const [extra, setExtra] = useState<ExtraRules | null>(null);
@@ -149,6 +151,31 @@ export function SchedulerApp() {
       setExtra(null);
       setMode(null);
       setError(err instanceof Error ? err.message : "No se pudo leer el Excel.");
+    }
+  }
+
+  async function onReportFile(file: File) {
+    try {
+      const loaded = await parseScheduleReport(await file.arrayBuffer(), file.name);
+      setMode("hours");
+      setParsed(loaded.parsed);
+      setExtra(loaded.extra);
+      setSchedule(loaded.schedule);
+      setAssignments(loaded.assignments);
+      setPhase("review");
+      setTimelines([]);
+      setFichaTimelineId({});
+      setOpenFicha(null);
+      setAssignMessage(null);
+      setVisitedAssign(false);
+      setSelected(null);
+      setError(null);
+      setSwapError(null);
+      setHistory([]);
+      setTab("fichas");
+      setHint("Horario cargado. Puedes consultar fichas, instructores y franjas, y mover celdas.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer el reporte de horarios.");
     }
   }
 
@@ -543,7 +570,7 @@ export function SchedulerApp() {
       parsed,
       schedule,
       extra,
-      mode === "manual" ? assignments : undefined,
+      Object.keys(assignments).length ? assignments : undefined,
     );
     downloadBuffer(buffer, `proyeccion_horarios_${fileSlug(parsed.area || "horarios")}.xlsx`);
   }
@@ -553,7 +580,7 @@ export function SchedulerApp() {
     const ficha = parsed.fichas.find((item) => item.name === fichaName);
     if (!ficha) return;
     const assigned = schedule.grid[ficha.name] ?? {};
-    const assignment = mode === "manual" ? assignments[ficha.name] : undefined;
+    const assignment = assignments[ficha.name];
     const slug = fileSlug(ficha.name);
     if (kind === "pdf") {
       const buffer = await exportFichaPdf(ficha, assigned, parsed.area ?? "", assignment, extra);
@@ -646,7 +673,7 @@ export function SchedulerApp() {
               <p className="mt-1 max-w-2xl text-sm text-slate-300">
                 {areaLabel
                   ? `Área ${areaLabel}. Carga otra proyección o continúa la programación.`
-                  : "Carga un Excel de proyección con horas, uno sin horas para asignar por línea de tiempo, o un avance guardado."}
+                  : "Carga un Excel de proyección, un avance guardado o un horario ya exportado."}
               </p>
             </div>
             <button
@@ -685,6 +712,14 @@ export function SchedulerApp() {
                   className="h-10 shrink-0 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Avance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reportInputRef.current?.click()}
+                  disabled={busy}
+                  className="h-10 shrink-0 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Horario
                 </button>
               </div>
             </div>
@@ -767,6 +802,17 @@ export function SchedulerApp() {
           e.target.value = "";
         }}
       />
+      <input
+        ref={reportInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void onReportFile(file);
+          e.target.value = "";
+        }}
+      />
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-6 px-6 py-8">
         {error ? (
@@ -778,7 +824,7 @@ export function SchedulerApp() {
 
         {!parsed || !extra || !mode ? (
           <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <DropZone
               onFile={(file) => void onHoursFile(file)}
               className="rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-12 text-center hover:border-teal-500 hover:bg-teal-50/40"
@@ -827,6 +873,23 @@ export function SchedulerApp() {
                 <span className="mt-2 block text-sm text-slate-500">
                   Retoma un archivo .md guardado con la asignación en curso. También puedes
                   arrastrarlo aquí.
+                </span>
+              </button>
+            </DropZone>
+            <DropZone
+              onFile={(file) => void onReportFile(file)}
+              className="rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-12 text-center hover:border-teal-500 hover:bg-teal-50/40"
+              activeClassName="border-teal-500 bg-teal-50"
+            >
+              <button
+                type="button"
+                onClick={() => reportInputRef.current?.click()}
+                className="w-full"
+              >
+                <span className="text-lg font-semibold">Cargar horario</span>
+                <span className="mt-2 block text-sm text-slate-500">
+                  Abre el Excel exportado con todos los horarios para consultar fichas, instructores
+                  y franjas, y mover celdas. También puedes arrastrarlo aquí.
                 </span>
               </button>
             </DropZone>
@@ -1067,18 +1130,53 @@ export function SchedulerApp() {
                         : tab === "noche"
                           ? parsed.fichas.filter((f) => f.jornada === "NOCHE")
                           : parsed.fichas
-                    ).map((ficha) => (
-                      <FichaGrid
-                        key={ficha.name}
-                        ficha={ficha}
-                        assigned={schedule.grid[ficha.name] ?? {}}
-                        selected={selected}
-                        swapPreview={selected?.ficha === ficha.name ? swapPreview : undefined}
-                        onSelect={onSelect}
-                        onExportExcel={() => void exportOneFicha(ficha.name, "xlsx")}
-                        onExportPdf={() => void exportOneFicha(ficha.name, "pdf")}
-                      />
-                    ))}
+                    ).map((ficha) => {
+                      const detail = assignments[ficha.name];
+                      return (
+                        <div key={ficha.name} className="space-y-3">
+                          <FichaGrid
+                            ficha={ficha}
+                            assigned={schedule.grid[ficha.name] ?? {}}
+                            selected={selected}
+                            swapPreview={selected?.ficha === ficha.name ? swapPreview : undefined}
+                            onSelect={onSelect}
+                            onExportExcel={() => void exportOneFicha(ficha.name, "xlsx")}
+                            onExportPdf={() => void exportOneFicha(ficha.name, "pdf")}
+                          />
+                          {detail?.rows.length ? (
+                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                              <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800">
+                                Detalle de la ficha
+                              </p>
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                  <thead className="bg-slate-900 text-xs text-white">
+                                    <tr>
+                                      <th className="px-3 py-2 font-semibold">Norma de competencia</th>
+                                      <th className="px-3 py-2 font-semibold">Resultado</th>
+                                      <th className="px-3 py-2 font-semibold">Instructor</th>
+                                      <th className="px-3 py-2 font-semibold">Horas</th>
+                                      <th className="px-3 py-2 font-semibold">Observación</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {detail.rows.map((row) => (
+                                      <tr key={row.id} className="border-t border-slate-100 align-top">
+                                        <td className="px-3 py-2">{row.norma || "—"}</td>
+                                        <td className="whitespace-pre-wrap px-3 py-2">{row.resultados.join("\n") || "—"}</td>
+                                        <td className="px-3 py-2">{row.instructor || "—"}</td>
+                                        <td className="px-3 py-2">{row.hours}</td>
+                                        <td className="whitespace-pre-wrap px-3 py-2">{row.observation || row.ap || "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </>

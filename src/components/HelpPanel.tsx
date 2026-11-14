@@ -111,7 +111,7 @@ export function HelpPanel({ open, onClose, section, fichaOpen = false, onDownloa
 function CargarHelp({ onDownloadTemplate }: { onDownloadTemplate: (kind: TemplateKind) => void }) {
   return (
     <div className="space-y-4">
-      <p>Elige el archivo según lo que tengas. Los tres botones del banner hacen cosas distintas:</p>
+      <p>Elige el archivo según lo que tengas. Los botones del banner hacen cosas distintas:</p>
       <ul className="list-disc space-y-1 pl-5">
         <li>
           <strong>Con horas:</strong> el Excel ya trae horas por instructor en cada ficha. Sigues a
@@ -123,6 +123,10 @@ function CargarHelp({ onDownloadTemplate }: { onDownloadTemplate: (kind: Templat
         </li>
         <li>
           <strong>Avance:</strong> retoma un <code>.md</code> guardado con Guardar avance.
+        </li>
+        <li>
+          <strong>Horario:</strong> abre el Excel generado con Exportar Excel. Vuelves a ver fichas,
+          instructores, franjas y el detalle de resultados, y puedes mover celdas.
         </li>
       </ul>
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -247,6 +251,7 @@ function HorarioHelp() {
         <li>Solo se aplica el cambio en una celda verde.</li>
         <li>Deshacer vuelve al horario anterior.</li>
         <li>Cada ficha tiene Excel y PDF propios, con enfoque, franjas, resultados y observaciones.</li>
+        <li>El botón Horario vuelve a abrir un Excel exportado para consultarlo y seguir moviendo franjas.</li>
       </ul>
       <p>El Excel exportado de cada ficha va en este orden:</p>
       <ol className="list-decimal space-y-1 pl-5">
