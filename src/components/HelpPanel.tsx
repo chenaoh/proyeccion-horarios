@@ -190,6 +190,7 @@ function AsignacionHelp({ fichaOpen }: { fichaOpen: boolean }) {
         <li>En mañana o tarde, las horas de cada instructor deben ser múltiplo de 3.</li>
         <li>El combo muestra las horas totales del instructor en todas las fichas, no solo en esta.</li>
         <li>La observación llega de la fila AP de la línea de tiempo y se puede editar.</li>
+        <li>En Avance por instructores, un clic en el nombre muestra la ficha y la observación de lo que debe orientar. Otro clic lo cierra.</li>
         <li>Puedes agregar un instructor que no venía en el Excel. Queda en el combo y en restricciones.</li>
         <li>El check Programar sábado cambia la ficha. En noche, al marcarlo el tope pasa de 20 h a 30 h.</li>
         <li>Guarda la ficha antes de pasar a restricciones.</li>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { AddInstructorForm } from "@/components/AddInstructorForm";
 import {
   assignmentIssues,
@@ -12,6 +12,7 @@ import {
   overloadedInstructors,
 } from "@/lib/assignment";
 import { weeklyHoursTarget } from "@/lib/hoursTarget";
+import { namesMatch } from "@/lib/names";
 import { resultLabel, trimestreEnfoque, trimestreResultCount } from "@/lib/parseTimeline";
 import type { AssignmentRow, FichaAssignment, FichaInput, Timeline } from "@/lib/types";
 
@@ -62,13 +63,33 @@ function OverloadAlert({ items }: { items: { name: string; hours: number }[] }) 
   );
 }
 
+function topicsForInstructor(name: string, fichas: FichaInput[], assignments: Record<string, FichaAssignment>) {
+  const topics: { ficha: string; result: string; observation: string }[] = [];
+  for (const ficha of fichas) {
+    const assignment = assignments[ficha.name];
+    if (!assignment) continue;
+    for (const row of assignment.rows) {
+      if (!namesMatch(row.instructor, name)) continue;
+      topics.push({
+        ficha: ficha.name,
+        result: resultLabel(row),
+        observation: (row.observation || row.ap).trim() || "Sin observación",
+      });
+    }
+  }
+  return topics;
+}
+
 function InstructorProgress({
   instructors,
+  fichas,
   assignments,
 }: {
   instructors: string[];
+  fichas: FichaInput[];
   assignments: Record<string, FichaAssignment>;
 }) {
+  const [openName, setOpenName] = useState<string | null>(null);
   const totals = instructorTotals(assignments);
   const rows = instructors
     .map((name) => ({ name, hours: totals[name] ?? 0 }))
@@ -78,7 +99,10 @@ function InstructorProgress({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="bg-slate-900 px-4 py-3 text-white">
         <h3 className="text-sm font-semibold">Avance por instructor</h3>
-        <p className="text-xs text-slate-300">Horas totales en todas las fichas. El aviso es a partir de {INSTRUCTOR_HOUR_ALERT} h.</p>
+        <p className="text-xs text-slate-300">
+          Horas totales en todas las fichas. Haz clic en un instructor para ver qué debe orientar en cada ficha. El
+          aviso es a partir de {INSTRUCTOR_HOUR_ALERT} h.
+        </p>
       </header>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -92,20 +116,52 @@ function InstructorProgress({
           <tbody>
             {rows.map((row) => {
               const over = row.hours > INSTRUCTOR_HOUR_ALERT;
+              const open = openName === row.name;
+              const topics = open ? topicsForInstructor(row.name, fichas, assignments) : [];
               return (
-                <tr key={row.name} className={over ? "bg-amber-50" : ""}>
-                  <td className="border-t border-slate-100 px-4 py-2 font-medium">{row.name}</td>
-                  <td className="border-t border-slate-100 px-4 py-2">{row.hours} h</td>
-                  <td className="border-t border-slate-100 px-4 py-2 text-xs">
-                    {over ? (
-                      <span className="font-semibold text-amber-800">Más de {INSTRUCTOR_HOUR_ALERT} h</span>
-                    ) : row.hours > 0 ? (
-                      <span className="text-slate-500">Dentro del aviso</span>
-                    ) : (
-                      <span className="text-slate-400">Sin horas</span>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={row.name}>
+                  <tr className={over ? "bg-amber-50" : open ? "bg-teal-50" : ""}>
+                    <td className="border-t border-slate-100 px-4 py-2 font-medium">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => setOpenName(open ? null : row.name)}
+                        className="text-left font-medium text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-700"
+                      >
+                        {row.name}
+                      </button>
+                    </td>
+                    <td className="border-t border-slate-100 px-4 py-2">{row.hours} h</td>
+                    <td className="border-t border-slate-100 px-4 py-2 text-xs">
+                      {over ? (
+                        <span className="font-semibold text-amber-800">Más de {INSTRUCTOR_HOUR_ALERT} h</span>
+                      ) : row.hours > 0 ? (
+                        <span className="text-slate-500">Dentro del aviso</span>
+                      ) : (
+                        <span className="text-slate-400">Sin horas</span>
+                      )}
+                    </td>
+                  </tr>
+                  {open ? (
+                    <tr className="bg-teal-50/60">
+                      <td colSpan={3} className="border-t border-teal-100 px-4 py-3">
+                        {topics.length ? (
+                          <ul className="space-y-3">
+                            {topics.map((topic, index) => (
+                              <li key={`${topic.ficha}-${topic.result}-${index}`}>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">{topic.ficha}</p>
+                                <p className="mt-0.5 text-xs text-slate-500">{topic.result}</p>
+                                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{topic.observation}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500">Este instructor todavía no tiene temas asignados.</p>
+                        )}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>
@@ -389,7 +445,7 @@ export function AssignmentBoard({
       </div>
 
       {view === "instructores" ? (
-        <InstructorProgress instructors={instructors} assignments={assignments} />
+        <InstructorProgress instructors={instructors} fichas={fichas} assignments={assignments} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {fichas.map((ficha) => {
