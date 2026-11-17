@@ -1,4 +1,4 @@
-import { inNameList } from "./names";
+import { inNameList, isRoleInstructor } from "./names";
 import { allowsSixHours, DAILY_HOUR_CAP, hoursOf, maxSaturdayOf, occupiedOf } from "./rules";
 import { overlap, parseSlotKey, slotsForFicha } from "./slots";
 import type { ExtraRules, Issue, ParsedWorkbook, Schedule } from "./types";
@@ -90,7 +90,7 @@ export function validateSchedule(
       const clash = busy[name].find(
         (b) => b.day === slot.day && overlap(slot.start, slot.end, b.start, b.end),
       );
-      if (clash) {
+      if (clash && !isRoleInstructor(name)) {
         issues.push({
           severity: "error",
           message: `Cruce de ${name}: ${ficha.name} y ${clash.ficha} el ${slot.day} ${slot.start}:00-${slot.end}:00.`,

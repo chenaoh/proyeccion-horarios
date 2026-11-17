@@ -217,7 +217,7 @@ function RestriccionesHelp() {
         </li>
         <li>
           <strong>6 h seguidas:</strong> opcional, por instructor y en la misma ficha. Va desmarcada.
-          No reemplaza las 11 h.
+          Si está marcada, esas 6 h ocupan el día completo de la ficha. No reemplaza las 11 h.
         </li>
         <li>
           <strong>Sin noche / Sin sábado:</strong> no se programa en esas franjas. Una ficha de noche
@@ -243,7 +243,10 @@ function HorarioHelp() {
     <div className="space-y-3">
       <p>
         <strong>Iniciar programación</strong> busca un horario sin cruces de instructor ni de
-        ambiente. Si se traba en una ficha, el aviso nombra a los instructores que conviene revisar.
+        ambiente. En la noche y el sábado arma bloques de 4 h y solo parte en 2 h cuando no cabe el
+        de 4. Inglés, Abogado, Comunicador, Deporte, Administrador, Ambiental, Etica y SSyT pueden
+        coincidir en la misma franja solo si de otra forma el horario no sale. Si se traba en una
+        ficha, el aviso nombra a los instructores que conviene revisar.
       </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>Clic en una celda: queda seleccionada.</li>

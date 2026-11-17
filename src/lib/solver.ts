@@ -1,4 +1,4 @@
-import { inNameList } from "./names";
+import { inNameList, isRoleInstructor } from "./names";
 import {
   allowsSixHours,
   DAILY_HOUR_CAP,
@@ -32,7 +32,19 @@ function assignSaturdayBlocks(
   function dfs(index: number, remaining: { name: string; hours: 2 | 4 }[]): boolean {
     if (index === SABADO.length) return remaining.length === 0;
     const slot = SABADO[index];
-    const ordered = shuffle(remaining);
+    const fours = shuffle(remaining.filter((block) => block.hours === 4));
+    const twos = shuffle(remaining.filter((block) => block.hours === 2)).sort((a, b) => {
+      const touch = (name: string) => {
+        const grid = st.grid[ficha.name] ?? {};
+        const beside = SABADO.some((other) => {
+          const touches = other.end === slot.start || other.start === slot.end;
+          return touches && grid[slotKey(other)] === name;
+        });
+        return beside ? 1 : 0;
+      };
+      return touch(b.name) - touch(a.name);
+    });
+    const ordered = [...fours, ...twos];
     for (let i = 0; i < ordered.length; i++) {
       const block = ordered[i];
       const rest = ordered.filter((_, j) => j !== i);
@@ -81,6 +93,8 @@ class State {
   ambBusy: Busy = {};
   grid: Record<string, Record<string, string>> = {};
   fichaDay: FichaDay = {};
+  /** Si es true, un rol puede estar en dos fichas a la misma hora. */
+  allowRoleOverlap = false;
 
   ensure(name: string) {
     if (!this.hours[name]) this.hours[name] = emptyDayMap();
@@ -112,7 +126,10 @@ class State {
         return "no tiene marcadas 6 h seguidas";
       }
     }
-    if (this.busy[name][slot.day].some((item) => overlap(slot.start, slot.end, item.a, item.b))) {
+    const overlapsSomeone = this.busy[name][slot.day].some((item) =>
+      overlap(slot.start, slot.end, item.a, item.b),
+    );
+    if (overlapsSomeone && !(this.allowRoleOverlap && isRoleInstructor(name))) {
       return "ya está en otra ficha a esa hora";
     }
     if (ficha.ambiente) {
@@ -194,9 +211,10 @@ function shapesFor(name: string, hours: number, noSat: boolean, extra: ExtraRule
     .filter((shape) => {
       if (noN && shape.wd4 + shape.wd2 > 0) return false;
       if (noS && shape.sat4 + shape.sat2 > 0) return false;
+      if (shape.wd2 >= 2 || shape.sat2 >= 2) return false;
       return 4 * shape.wd4 + 2 * shape.wd2 + 4 * shape.sat4 + 2 * shape.sat2 === hours;
     })
-    .sort((a, b) => b.wd4 * 10 - b.wd2 - (a.wd4 * 10 - a.wd2))
+    .sort((a, b) => b.wd4 - a.wd4 || b.sat4 - a.sat4 || a.wd2 - b.wd2 || a.sat2 - b.sat2)
     .slice(0, 10);
 }
 
@@ -219,7 +237,7 @@ function nightPacks(hours: Record<string, number>, noSat: boolean, extra: ExtraR
           wd2,
           sat4,
           sat2,
-          score: wd4.length * 10 - wd2.length,
+          score: wd4.length * 10 + sat4.length * 5 - wd2.length - sat2.length,
         });
       }
       return;
@@ -321,36 +339,92 @@ function popAssignedNightWeekdays(st: State, ficha: FichaInput) {
   }
 }
 
-function tryAssignList(st: State, ficha: FichaInput, slots: Slot[], names: string[], extra: ExtraRules): boolean {
-  const order = shuffle(slots.map((_, i) => i));
-  function candidates(slot: Slot, remaining: string[]): string[] {
-    const shuffled = shuffle(remaining);
-    const continuing: string[] = [];
-    const rest: string[] = [];
-    for (const name of shuffled) {
-      if (allowsSixHours(extra, name) && (st.fichaDay[ficha.name]?.[name]?.[slot.day] ?? 0) > 0) {
-        continuing.push(name);
-      } else {
-        rest.push(name);
+type DayBlock = { name: string; hours: 3 | 6 };
+
+function dayPairs(slots: Slot[]): [Slot, Slot][] {
+  const days = WEEKDAYS.filter((day) => slots.some((slot) => slot.day === day));
+  return days.map((day) => {
+    const pair = slots.filter((slot) => slot.day === day).sort((a, b) => a.start - b.start);
+    if (pair.length !== 2) throw new Error(`La jornada no tiene dos franjas el ${day}.`);
+    return [pair[0], pair[1]];
+  });
+}
+
+function dayBlocksFor(ficha: FichaInput, extra: ExtraRules): DayBlock[] {
+  const blocks: DayBlock[] = [];
+  for (const [name, hours] of Object.entries(ficha.hours)) {
+    if (hours % 3 !== 0) throw new Error(`${ficha.name}: ${name} tiene ${hours} h (debe ser múltiplo de 3).`);
+    let left = hours;
+    if (allowsSixHours(extra, name)) {
+      while (left >= 6) {
+        blocks.push({ name, hours: 6 });
+        left -= 6;
       }
     }
-    return [...continuing, ...rest];
+    while (left >= 3) {
+      blocks.push({ name, hours: 3 });
+      left -= 3;
+    }
   }
-  function dfs(k: number, remaining: string[]): boolean {
-    if (k === order.length) return true;
-    const slot = slots[order[k]];
-    const ordered = candidates(slot, remaining);
-    for (let i = 0; i < ordered.length; i++) {
-      const name = ordered[i];
-      if (st.can(name, slot, ficha, extra)) {
-        st.put(name, slot, ficha);
-        if (dfs(k + 1, ordered.filter((_, j) => j !== i))) return true;
-        st.pop(name, slot, ficha);
+  return blocks;
+}
+
+function assignDayBlocks(
+  st: State,
+  ficha: FichaInput,
+  extra: ExtraRules,
+  pairs: [Slot, Slot][],
+  blocks: DayBlock[],
+): boolean {
+  const days = shuffle(pairs);
+
+  function dfs(dayIndex: number, remaining: DayBlock[]): boolean {
+    if (dayIndex === days.length) return remaining.length === 0;
+    const [slotA, slotB] = days[dayIndex];
+    const sixes = remaining
+      .map((block, index) => ({ block, index }))
+      .filter((item) => item.block.hours === 6);
+    for (const item of shuffle(sixes)) {
+      if (!st.can(item.block.name, slotA, ficha, extra)) continue;
+      st.put(item.block.name, slotA, ficha);
+      if (!st.can(item.block.name, slotB, ficha, extra)) {
+        st.pop(item.block.name, slotA, ficha);
+        continue;
+      }
+      st.put(item.block.name, slotB, ficha);
+      if (dfs(dayIndex + 1, remaining.filter((_, index) => index !== item.index))) return true;
+      st.pop(item.block.name, slotA, ficha);
+      st.pop(item.block.name, slotB, ficha);
+    }
+    const threes = remaining
+      .map((block, index) => ({ block, index }))
+      .filter((item) => item.block.hours === 3);
+    for (let i = 0; i < threes.length; i++) {
+      for (let j = 0; j < threes.length; j++) {
+        if (i === j) continue;
+        const left = threes[i];
+        const right = threes[j];
+        if (!st.can(left.block.name, slotA, ficha, extra)) continue;
+        st.put(left.block.name, slotA, ficha);
+        if (!st.can(right.block.name, slotB, ficha, extra)) {
+          st.pop(left.block.name, slotA, ficha);
+          continue;
+        }
+        st.put(right.block.name, slotB, ficha);
+        const used = new Set([left.index, right.index]);
+        if (dfs(dayIndex + 1, remaining.filter((_, index) => !used.has(index)))) return true;
+        st.pop(left.block.name, slotA, ficha);
+        st.pop(right.block.name, slotB, ficha);
       }
     }
     return false;
   }
-  return dfs(0, names);
+
+  return dfs(0, blocks);
+}
+
+function assignDay(st: State, ficha: FichaInput, slots: Slot[], extra: ExtraRules): boolean {
+  return assignDayBlocks(st, ficha, extra, dayPairs(slots), dayBlocksFor(ficha, extra));
 }
 
 function assignNight(st: State, ficha: FichaInput, extra: ExtraRules): boolean {
@@ -371,15 +445,6 @@ function assignNight(st: State, ficha: FichaInput, extra: ExtraRules): boolean {
     popAssignedNightWeekdays(st, ficha);
   }
   return false;
-}
-
-function assignDay(st: State, ficha: FichaInput, slots: Slot[], extra: ExtraRules): boolean {
-  const names: string[] = [];
-  for (const [name, h] of Object.entries(ficha.hours)) {
-    if (h % 3 !== 0) throw new Error(`${ficha.name}: ${name} tiene ${h} h (debe ser múltiplo de 3).`);
-    for (let i = 0; i < h / 3; i++) names.push(name);
-  }
-  return tryAssignList(st, ficha, slots, names, extra);
 }
 
 export type SolveResult =
@@ -453,11 +518,16 @@ function failResult(lastFail?: string, hint?: string): SolveResult {
   };
 }
 
-function tryOneAttempt(parsed: ParsedWorkbook, extra: ExtraRules): AttemptResult {
+function hasRoleInstructor(parsed: ParsedWorkbook): boolean {
+  return parsed.fichas.some((ficha) => Object.keys(ficha.hours).some((name) => isRoleInstructor(name)));
+}
+
+function tryOneAttempt(parsed: ParsedWorkbook, extra: ExtraRules, allowRoleOverlap = false): AttemptResult {
   const nights = parsed.fichas.filter((f) => f.jornada === "NOCHE");
   const mornings = parsed.fichas.filter((f) => f.jornada === "MAÑANA");
   const afternoons = parsed.fichas.filter((f) => f.jornada === "TARDE");
   const st = new State();
+  st.allowRoleOverlap = allowRoleOverlap;
   const seq = [...shuffle(nights), ...shuffle(mornings), ...shuffle(afternoons)].filter(
     (ficha) => hoursOf(ficha) > 0,
   );
@@ -478,8 +548,9 @@ function tryOneAttempt(parsed: ParsedWorkbook, extra: ExtraRules): AttemptResult
 function consumeAttempt(
   parsed: ParsedWorkbook,
   extra: ExtraRules,
+  allowRoleOverlap = false,
 ): SolveResult | { continue: true; lastFail?: string; hint?: string } {
-  const result = tryOneAttempt(parsed, extra);
+  const result = tryOneAttempt(parsed, extra, allowRoleOverlap);
   if (result.ok) return { ok: true, schedule: result.schedule };
   if (result.error) return { ok: false, message: result.error };
   return { continue: true, lastFail: result.lastFail, hint: result.hint };
@@ -498,19 +569,26 @@ export function solveSchedule(
   let lastFail: string | undefined;
   let lastHint: string | undefined;
   let lastReport = 0;
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    const now = Date.now();
-    if (onProgress && (attempt === 0 || now - lastReport >= 80 || attempt === attempts - 1)) {
-      lastReport = now;
-      onProgress({ attempt: attempt + 1, attempts });
+  const phases = hasRoleInstructor(parsed) ? [false, true] : [false];
+  const total = attempts * phases.length;
+  let offset = 0;
+  for (const allowRoleOverlap of phases) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const now = Date.now();
+      const stepNumber = offset + attempt + 1;
+      if (onProgress && (stepNumber === 1 || now - lastReport >= 80 || stepNumber === total)) {
+        lastReport = now;
+        onProgress({ attempt: stepNumber, attempts: total });
+      }
+      const step = consumeAttempt(parsed, extra, allowRoleOverlap);
+      if ("continue" in step) {
+        lastFail = step.lastFail;
+        lastHint = step.hint;
+        continue;
+      }
+      return step;
     }
-    const step = consumeAttempt(parsed, extra);
-    if ("continue" in step) {
-      lastFail = step.lastFail;
-      lastHint = step.hint;
-      continue;
-    }
-    return step;
+    offset += attempts;
   }
   return failResult(lastFail, lastHint);
 }
@@ -527,20 +605,27 @@ export async function solveScheduleAsync(
   }
   let lastFail: string | undefined;
   let lastHint: string | undefined;
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    if (attempt === 0 || attempt % 8 === 0 || attempt === attempts - 1) {
-      onProgress?.({ attempt: attempt + 1, attempts });
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
+  const phases = hasRoleInstructor(parsed) ? [false, true] : [false];
+  const total = attempts * phases.length;
+  let offset = 0;
+  for (const allowRoleOverlap of phases) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const stepNumber = offset + attempt + 1;
+      if (stepNumber === 1 || stepNumber % 8 === 0 || stepNumber === total) {
+        onProgress?.({ attempt: stepNumber, attempts: total });
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      }
+      const step = consumeAttempt(parsed, extra, allowRoleOverlap);
+      if ("continue" in step) {
+        lastFail = step.lastFail;
+        lastHint = step.hint;
+        continue;
+      }
+      return step;
     }
-    const step = consumeAttempt(parsed, extra);
-    if ("continue" in step) {
-      lastFail = step.lastFail;
-      lastHint = step.hint;
-      continue;
-    }
-    return step;
+    offset += attempts;
   }
   return failResult(lastFail, lastHint);
 }

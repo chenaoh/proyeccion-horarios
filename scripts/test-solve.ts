@@ -7,6 +7,7 @@ import { parseWorkbook } from "../src/lib/parseExcel";
 import { buildBaseTemplate } from "../src/lib/templateExcel";
 import { solveSchedule } from "../src/lib/solver";
 import { validateSchedule } from "../src/lib/validate";
+import { parseSlotKey, SABADO } from "../src/lib/slots";
 import type { Day, ExtraRules, FichaAssignment, ParsedWorkbook, Schedule } from "../src/lib/types";
 
 function run(label: string, parsed: ParsedWorkbook, extra: ExtraRules, attempts = 3000): Schedule {
@@ -110,6 +111,119 @@ if (anaTwelveWeek !== 8 || (anaTwelve?.sab ?? 0) !== 4) {
   console.error("Ana debía quedar con 8 h entre semana y 4 h el sábado", anaTwelve);
   process.exit(1);
 }
+
+function blocksOf(slots: { start: number; end: number }[]): number[] {
+  const sorted = [...slots].sort((a, b) => a.start - b.start);
+  const blocks: number[] = [];
+  let end = sorted[0].end;
+  let start = sorted[0].start;
+  for (const slot of sorted.slice(1)) {
+    if (slot.start === end) end = slot.end;
+    else {
+      blocks.push(end - start);
+      start = slot.start;
+      end = slot.end;
+    }
+  }
+  blocks.push(end - start);
+  return blocks;
+}
+
+function assertSolidBlocks(label: string, schedule: Schedule) {
+  for (const [ficha, cells] of Object.entries(schedule.grid)) {
+    const grouped = new Map<string, { start: number; end: number }[]>();
+    const weekTwos = new Map<string, number>();
+    for (const [key, name] of Object.entries(cells)) {
+      const slot = parseSlotKey(key);
+      const id = `${name}|${slot.day}`;
+      const list = grouped.get(id) ?? [];
+      list.push({ start: slot.start, end: slot.end });
+      grouped.set(id, list);
+    }
+    for (const [id, ranges] of grouped) {
+      const [name, day] = id.split("|");
+      const blocks = blocksOf(ranges);
+      const night = ranges.some((range) => range.start >= 18) || day === "sab";
+      for (const hours of blocks) {
+        const ok =
+          day === "sab" ? hours === 2 || hours === 4 || hours === 6 || hours === 8 || hours === 10 : night ? hours === 2 || hours === 4 : hours === 3 || hours === 6;
+        if (!ok) {
+          console.error(`${label}: ${ficha} ${name} quedó con un bloque de ${hours} h el ${day}`);
+          process.exit(1);
+        }
+      }
+      if (day === "sab" && blocks.filter((hours) => hours === 2).length > 1) {
+        console.error(`${label}: ${ficha} ${name} tiene el sábado partido en franjas de 2 h`, blocks);
+        process.exit(1);
+      }
+      if (day !== "sab" && night && blocks.length === 1 && blocks[0] === 2) {
+        weekTwos.set(name, (weekTwos.get(name) ?? 0) + 1);
+      }
+    }
+    for (const [name, count] of weekTwos) {
+      if (count > 1) {
+        console.error(`${label}: ${ficha} ${name} tiene ${count} noches sueltas de 2 h`);
+        process.exit(1);
+      }
+    }
+  }
+}
+
+assertSolidBlocks("mini", miniSchedule);
+assertSolidBlocks("noche", nightSchedule);
+assertSolidBlocks("doce", twelveSchedule);
+const anaSaturday = Object.entries(twelveSchedule.grid["Ficha doce"] ?? {})
+  .map(([key, name]) => ({ key, name, slot: parseSlotKey(key) }))
+  .filter((item) => item.name === "Ana" && item.slot.day === "sab")
+  .sort((a, b) => a.slot.start - b.slot.start);
+if (anaSaturday.length !== 2 || anaSaturday[1].slot.start !== anaSaturday[0].slot.end) {
+  console.error("Las 4 h de Ana el sábado no quedaron seguidas", anaSaturday.map((item) => item.slot.label));
+  process.exit(1);
+}
+console.log("Bloques completos OK", SABADO.length);
+
+function roleWorkbook(): ArrayBuffer {
+  return workbookFrom([
+    ["AREA:", "TIC"],
+    [],
+    ["FICHA", "JORNADA", "TRIMESTRE", "SABADO", "Director", "Ambiente", "Inglés", "Etica"],
+    ["Ficha rol 1", "NOCHE", 1, "NO", "Inglés", "Aula 1", 12, 8],
+    ["Ficha rol 2", "NOCHE", 1, "NO", "Etica", "Aula 2", 12, 8],
+  ]);
+}
+
+const roles = parseWorkbook(roleWorkbook(), "roles.xlsx");
+const roleSchedule = run("roles pueden cruzarse si no hay otra forma", roles, roles.extraRules, 300);
+const roleKeys = ["Ficha rol 1", "Ficha rol 2"].map((name) => new Set(Object.keys(roleSchedule.grid[name] ?? {})));
+const shared = [...roleKeys[0]].filter((key) => roleKeys[1].has(key));
+if (!shared.length) {
+  console.error("Los roles debían coincidir en alguna franja");
+  process.exit(1);
+}
+const personClash = validateSchedule(
+  {
+    ...roles,
+    fichas: roles.fichas,
+    instructorNames: ["Ana", "Inglés"],
+  },
+  {
+    grid: {
+      "Ficha rol 1": { "lun|06-09|6|9": "Ana", "mar|06-09|6|9": "Inglés" },
+      "Ficha rol 2": { "lun|06-09|6|9": "Ana", "mar|06-09|6|9": "Inglés" },
+    },
+    hoursByInstructorDay: {},
+  },
+  roles.extraRules,
+);
+if (!personClash.some((issue) => issue.message.includes("Cruce de Ana"))) {
+  console.error("Ana debía marcar cruce", personClash);
+  process.exit(1);
+}
+if (personClash.some((issue) => issue.message.includes("Cruce de Inglés"))) {
+  console.error("Inglés no debe marcar cruce", personClash);
+  process.exit(1);
+}
+console.log("Cruce de roles OK");
 
 function stuckWorkbook(): ArrayBuffer {
   return workbookFrom([

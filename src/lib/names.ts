@@ -29,3 +29,19 @@ export const DEFAULT_NO_SABADO = [
   "Yeison",
   "Germán Angarita",
 ];
+
+/** Roles, no personas. Pueden coincidir en la misma franja cuando no hay otra forma de programar. */
+export const ROLE_INSTRUCTORS = [
+  "Inglés",
+  "Abogado",
+  "Comunicador",
+  "Deporte",
+  "Administrador",
+  "Ambiental",
+  "Etica",
+  "SSyT",
+];
+
+export function isRoleInstructor(name: string): boolean {
+  return inNameList(name, ROLE_INSTRUCTORS);
+}
