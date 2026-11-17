@@ -256,6 +256,7 @@ function HorarioHelp() {
         <li>Cada ficha tiene Excel y PDF propios, con enfoque, franjas, resultados y observaciones.</li>
         <li>El botón Horario vuelve a abrir un Excel exportado para consultarlo y seguir moviendo franjas.</li>
         <li>Ver detalle, debajo de cada ficha, abre el enfoque, los resultados y las horas. Un segundo clic lo cierra.</li>
+        <li>En Por instructor, un clic en el nombre abre la grilla semanal con las fichas y las temáticas. Desde ahí se exporta el PDF de ese instructor.</li>
       </ul>
       <p>El Excel exportado de cada ficha va en este orden:</p>
       <ol className="list-decimal space-y-1 pl-5">

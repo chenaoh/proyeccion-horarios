@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
 import { exportFichaWorkbook, exportScheduleWorkbook } from "../src/lib/exportExcel";
 import { exportFichaPdf } from "../src/lib/exportFichaPdf";
+import { exportInstructorPdf } from "../src/lib/exportInstructorPdf";
 import { parseWorkbook } from "../src/lib/parseExcel";
 import { buildBaseTemplate } from "../src/lib/templateExcel";
 import { solveSchedule } from "../src/lib/solver";
@@ -337,6 +338,22 @@ async function checkExport() {
     process.exit(1);
   }
   console.log("Ficha individual Excel y PDF OK");
+
+  const instructorPdf = await exportInstructorPdf({
+    name: "Ana",
+    total: 4,
+    rows: [
+      { dayKey: "lun", start: 6, end: 9, ficha: "Ficha mañana" },
+      { dayKey: "sab", start: 8, end: 10, ficha: "Ficha noche" },
+      { dayKey: "sab", start: 10, end: 12, ficha: "Ficha noche" },
+    ],
+    topics: [{ ficha: "Ficha noche", result: "RAP 1", observation: "Obs", hours: 4 }],
+  });
+  if (Buffer.from(instructorPdf).subarray(0, 5).toString("utf8") !== "%PDF-" || instructorPdf.byteLength < 500) {
+    console.error("El PDF del instructor no se generó");
+    process.exit(1);
+  }
+  console.log("PDF de instructor OK");
 
   const { parseScheduleReport } = await import("../src/lib/parseScheduleReport");
   const reloaded = await parseScheduleReport(exported, "reporte.xlsx");

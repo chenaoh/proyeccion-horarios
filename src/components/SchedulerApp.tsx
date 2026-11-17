@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AssignmentBoard } from "@/components/AssignmentBoard";
 import { DropZone } from "@/components/DropZone";
 import { FichaGrid, slotLabel } from "@/components/FichaGrid";
+import { InstructorPanel, topicsForInstructor } from "@/components/InstructorPanel";
 import { GeneratingOverlay } from "@/components/GeneratingOverlay";
 import { HelpPanel, type HelpSection } from "@/components/HelpPanel";
 import { RestrictionsPanel } from "@/components/RestrictionsPanel";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/assignment";
 import { downloadBuffer, downloadText, exportFichaWorkbook, exportScheduleWorkbook } from "@/lib/exportExcel";
 import { exportFichaPdf } from "@/lib/exportFichaPdf";
+import { exportInstructorPdf } from "@/lib/exportInstructorPdf";
 import { buildBaseTemplate, templateFileName, type TemplateKind } from "@/lib/templateExcel";
 import { timelineFitsFicha } from "@/lib/hoursTarget";
 import { parseWorkbook } from "@/lib/parseExcel";
@@ -591,6 +593,18 @@ export function SchedulerApp() {
     downloadBuffer(buffer, `horario_${slug}.xlsx`);
   }
 
+  async function exportInstructor(name: string) {
+    const inst = instructorAgenda.find((item) => item.name === name);
+    if (!inst || !parsed) return;
+    const buffer = await exportInstructorPdf({
+      name: inst.name,
+      total: inst.total,
+      rows: inst.rows,
+      topics: topicsForInstructor(name, parsed.fichas, assignments),
+    });
+    downloadBuffer(buffer, `horario_${fileSlug(name)}.pdf`, "application/pdf");
+  }
+
   const areaLabel = parsed?.area?.trim() ?? "";
   const title = areaLabel ? `Proyección horarios · ${areaLabel}` : "Proyección horarios";
   const hasMorning = Boolean(parsed?.fichas.some((f) => f.jornada === "MAÑANA"));
@@ -615,7 +629,7 @@ export function SchedulerApp() {
     if (!parsed || !schedule) return [];
     const map: Record<
       string,
-      { dayKey: (typeof DAYS)[number]; day: string; range: string; hours: number; ficha: string; jornada: string; start: number }[]
+      { dayKey: (typeof DAYS)[number]; day: string; range: string; hours: number; ficha: string; jornada: string; start: number; end: number }[]
     > = {};
     for (const ficha of parsed.fichas) {
       for (const [key, name] of Object.entries(schedule.grid[ficha.name] ?? {})) {
@@ -629,6 +643,7 @@ export function SchedulerApp() {
           ficha: ficha.name,
           jornada: slot.jornada,
           start: slot.start,
+          end: slot.end,
         });
       }
     }
@@ -1098,29 +1113,12 @@ export function SchedulerApp() {
                 </div>
 
                 {tab === "instructores" ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {instructorAgenda.map((inst) => (
-                      <article
-                        key={inst.name}
-                        className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-                      >
-                        <header className="bg-slate-900 px-4 py-3 text-white">
-                          <h3 className="font-semibold">{inst.name}</h3>
-                          <p className="text-xs text-slate-300">{inst.total} h / semana</p>
-                        </header>
-                        <ul className="divide-y divide-slate-100 text-sm">
-                          {inst.rows.map((row, idx) => (
-                            <li key={`${row.ficha}-${row.day}-${row.range}-${idx}`} className="px-4 py-2">
-                              <span className="font-medium">{row.day}</span> {row.range}
-                              <span className="mt-0.5 block text-xs text-slate-500">
-                                {row.ficha} · {row.hours} h · {row.jornada}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </article>
-                    ))}
-                  </div>
+                  <InstructorPanel
+                    agenda={instructorAgenda}
+                    fichas={parsed.fichas}
+                    assignments={assignments}
+                    onExportPdf={(name) => void exportInstructor(name)}
+                  />
                 ) : (
                   <div className="space-y-6">
                     {(tab === "manana"
